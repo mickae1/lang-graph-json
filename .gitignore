@@ -1,0 +1,31 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Internal specification (not published)
+cahier-des-charges.md
+
+# Secrets — never commit (see .env.example)
+.env
+
+# Persistent sessions (persistence: sqlite)
+data/
+
+# Build outputs
+build/
+dist/
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# LangGraph CLI
+.langgraph_api/

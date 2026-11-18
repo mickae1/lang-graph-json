@@ -1,0 +1,336 @@
+{
+  "version": 1,
+  "generated_by": "generate_tools_json.py",
+  "tools": [
+    {
+      "name": "compute_view",
+      "method": "POST",
+      "path": "/api/reports/{reportId}/views",
+      "domain": "analysis",
+      "description": "Computes a view (table) of a report.",
+      "parameters": {
+        "reportId": {
+          "type": "string",
+          "required": true
+        },
+        "view": {
+          "type": "string",
+          "required": true
+        },
+        "groupBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "returns": {
+        "viewId": "string"
+      }
+    },
+    {
+      "name": "create_report",
+      "method": "POST",
+      "path": "/api/reports",
+      "domain": "analysis",
+      "description": "Creates a report on datasets and/or job results of the open project.",
+      "parameters": {
+        "name": {
+          "type": "string",
+          "required": true
+        },
+        "type": {
+          "type": "string",
+          "required": true,
+          "enum": [
+            "Summary",
+            "Trend",
+            "Comparison"
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Dataset or job ids"
+        }
+      },
+      "returns": {
+        "reportId": "string"
+      }
+    },
+    {
+      "name": "delete_report",
+      "method": "DELETE",
+      "path": "/api/reports/{reportId}",
+      "domain": "analysis",
+      "description": "Deletes a report and its views.",
+      "parameters": {
+        "reportId": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "export_view",
+      "method": "POST",
+      "path": "/api/views/{viewId}/export",
+      "domain": "analysis",
+      "description": "Exports a computed view to CSV or Excel in the outbound shared folder.",
+      "parameters": {
+        "viewId": {
+          "type": "string",
+          "required": true
+        },
+        "format": {
+          "type": "string",
+          "enum": [
+            "csv",
+            "xlsx"
+          ],
+          "default": "csv"
+        }
+      },
+      "returns": {
+        "file": "string"
+      }
+    },
+    {
+      "name": "get_view_sample",
+      "method": "GET",
+      "path": "/api/views/{viewId}/sample",
+      "domain": "analysis",
+      "description": "Returns filtered / sorted rows of a computed view (never the full dataset).",
+      "parameters": {
+        "viewId": {
+          "type": "string",
+          "required": true
+        },
+        "filter": {
+          "type": "string",
+          "description": "Filter expression, e.g. 'value > 10'"
+        },
+        "sortBy": {
+          "type": "string"
+        },
+        "limit": {
+          "type": "integer",
+          "default": 20
+        }
+      },
+      "returns": {
+        "rows": "array"
+      }
+    },
+    {
+      "name": "get_view_summary",
+      "method": "GET",
+      "path": "/api/views/{viewId}/summary",
+      "domain": "analysis",
+      "description": "Returns a compact summary of a computed view: row count, column statistics (min/max/avg) and 10 sample rows.",
+      "parameters": {
+        "viewId": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "returns": {
+        "rowCount": "integer",
+        "columns": "array",
+        "sample": "array"
+      }
+    },
+    {
+      "name": "capture_screenshot",
+      "method": "POST",
+      "path": "/api/windows/{windowId}/screenshot",
+      "domain": "hmi",
+      "description": "Captures a screenshot of a window and returns the path of the PNG file.",
+      "parameters": {
+        "windowId": {
+          "type": "string",
+          "required": true
+        },
+        "scale": {
+          "type": "number",
+          "default": 1.0,
+          "description": "Scale factor (0.25 - 2.0)"
+        }
+      },
+      "returns": {
+        "file": "string"
+      }
+    },
+    {
+      "name": "close_window",
+      "method": "DELETE",
+      "path": "/api/windows/{windowId}",
+      "domain": "hmi",
+      "description": "Closes an open window.",
+      "parameters": {
+        "windowId": {
+          "type": "string",
+          "required": true
+        }
+      }
+    },
+    {
+      "name": "list_windows",
+      "method": "GET",
+      "path": "/api/windows",
+      "domain": "hmi",
+      "description": "Lists the windows currently open in the application.",
+      "parameters": {},
+      "returns": {
+        "windows": "array of {windowId, title}"
+      }
+    },
+    {
+      "name": "open_item",
+      "method": "POST",
+      "path": "/api/items/open",
+      "domain": "hmi",
+      "description": "Opens an item in a viewer window, on the requested tab.",
+      "parameters": {
+        "itemType": {
+          "type": "string",
+          "required": true,
+          "enum": [
+            "Document",
+            "Project",
+            "Dataset"
+          ]
+        },
+        "itemId": {
+          "type": "string",
+          "required": true,
+          "description": "Item identifier"
+        },
+        "tab": {
+          "type": "string",
+          "enum": [
+            "Overview",
+            "Details",
+            "History"
+          ]
+        }
+      },
+      "returns": {
+        "windowId": "string",
+        "status": "string"
+      }
+    },
+    {
+      "name": "create_job",
+      "method": "POST",
+      "path": "/api/jobs",
+      "domain": "jobs",
+      "description": "Creates a computation job in a project.",
+      "parameters": {
+        "projectId": {
+          "type": "string",
+          "required": true
+        },
+        "type": {
+          "type": "string",
+          "enum": [
+            "Import",
+            "Compute",
+            "Optimize"
+          ],
+          "default": "Compute"
+        }
+      },
+      "returns": {
+        "jobId": "string"
+      }
+    },
+    {
+      "name": "get_job_status",
+      "method": "GET",
+      "path": "/api/jobs/{jobId}",
+      "domain": "jobs",
+      "description": "Returns the progress and state of a job.",
+      "parameters": {
+        "jobId": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "returns": {
+        "state": "string",
+        "progress": "number"
+      }
+    },
+    {
+      "name": "run_job",
+      "method": "POST",
+      "path": "/api/jobs/{jobId}/run",
+      "domain": "jobs",
+      "description": "Starts a job. Long-running: completion is notified by a 'job.completed' event.",
+      "parameters": {
+        "jobId": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "returns": {
+        "status": "string"
+      }
+    },
+    {
+      "name": "create_project",
+      "method": "POST",
+      "path": "/api/projects",
+      "domain": "project",
+      "description": "Creates a new project and opens it. A project is required before any job or report.",
+      "parameters": {
+        "name": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "returns": {
+        "projectId": "string"
+      }
+    },
+    {
+      "name": "import_dataset",
+      "method": "POST",
+      "path": "/api/projects/{projectId}/datasets",
+      "domain": "project",
+      "description": "Imports a dataset folder into a project.",
+      "parameters": {
+        "projectId": {
+          "type": "string",
+          "required": true
+        },
+        "datasetPath": {
+          "type": "string",
+          "required": true
+        }
+      },
+      "returns": {
+        "datasetId": "string"
+      }
+    },
+    {
+      "name": "list_datasets",
+      "method": "GET",
+      "path": "/api/datasets",
+      "domain": "project",
+      "description": "Lists the datasets known to the application.",
+      "parameters": {
+        "filter": {
+          "type": "string",
+          "description": "Optional substring filter on the dataset name"
+        }
+      },
+      "returns": {
+        "datasets": "array of {name, path}"
+      }
+    }
+  ]
+}

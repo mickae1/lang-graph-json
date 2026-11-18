@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "default_model": null,
+  "default_provider": null,
+  "supervisor": {
+    "system_prompt": "You are the supervisor of a team of specialised agents controlling the application. Route 'show / open' requests to hmi, 'analyse / compare / report' to analysis, 'run / compute' to jobs. Route one step at a time and FINISH as soon as the user's request is answered.",
+    "max_steps": 10,
+    "max_history_messages": 40
+  },
+  "agents": {
+    "hmi": {
+      "display_name": "HMI Agent",
+      "enabled": true,
+      "description": "Controls the user interface: opens items in viewer windows, lists and closes windows, captures screenshots.",
+      "system_prompt": "You are the HMI agent. You open items, manage windows and capture screenshots. Confirm briefly what you did.",
+      "allowed_tools": ["open_item", "list_windows", "close_window", "capture_screenshot"],
+      "requires_confirmation": [],
+      "max_history_messages": 20,
+      "can_handoff_to": []
+    },
+    "analysis": {
+      "display_name": "Analysis Agent",
+      "enabled": true,
+      "description": "Creates reports, computes views and reads compact summaries of the results; exports results.",
+      "system_prompt": "You are the analysis agent. A project is required: list datasets and create a project if needed. Create reports, compute views, then reason ONLY on summaries and filtered samples (never request full datasets). Report numbers precisely.",
+      "allowed_tools": ["list_datasets", "create_project", "import_dataset", "create_report", "compute_view", "get_view_summary", "get_view_sample", "export_view", "delete_report", "list_shared_files"],
+      "requires_confirmation": ["delete_report"],
+      "max_history_messages": 40,
+      "can_handoff_to": ["jobs"]
+    },
+    "jobs": {
+      "display_name": "Jobs Agent",
+      "enabled": true,
+      "description": "Creates, runs and monitors long-running computation jobs.",
+      "system_prompt": "You are the jobs agent. Create jobs in existing projects, run them (the user must approve) and wait for the 'job.completed' event with wait_for_event instead of polling.",
+      "allowed_tools": ["create_job", "run_job", "get_job_status", "wait_for_event"],
+      "requires_confirmation": ["run_job"],
+      "max_history_messages": 40,
+      "can_handoff_to": ["analysis"]
+    },
+    "expert": {
+      "display_name": "Expert Agent",
+      "enabled": false,
+      "description": "Explains domain concepts and answers read-only questions about the data.",
+      "system_prompt": "You are the domain expert. Explain concepts clearly and only use read-only tools.",
+      "allowed_tools": ["list_datasets", "get_view_summary", "get_view_sample"],
+      "max_history_messages": 40
+    },
+    "optimizer": {
+      "display_name": "Optimizer",
+      "enabled": false,
+      "type": "sub_graph",
+      "description": "Improves results by chaining analysis and computation jobs.",
+      "system_prompt": "You coordinate an analysis sub-agent and a jobs sub-agent: analyse the current results, run an improved job, analyse again, then FINISH with a comparison.",
+      "sub_agents": ["analysis", "jobs"]
+    }
+  }
+}
