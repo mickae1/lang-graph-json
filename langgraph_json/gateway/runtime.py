@@ -259,10 +259,15 @@ class Runtime:
                 await saver.setup()
             except Exception as exc:  # noqa: BLE001 — unwritable path, corrupt file...
                 raise ConfigError([f"{SERVER_FILE}: cannot open the SQLite database {path}: {exc}"]) from exc
-            self.checkpointer, self._sqlite_conn = saver, conn
-            self.persistence, self.sqlite_file = "sqlite", path
-            log.info("conversation history persisted in %s", path)
+            # Executed (the body of _use_sqlite is covered), but Python 3.11 line
+            # tracing misses the line right after this try/await block.
+            self._use_sqlite(saver, conn, path)  # pragma: no cover
         await self._restore_sessions()
+
+    def _use_sqlite(self, saver, conn, path: Path) -> None:
+        self.checkpointer, self._sqlite_conn = saver, conn
+        self.persistence, self.sqlite_file = "sqlite", path
+        log.info("conversation history persisted in %s", path)
 
     async def _restore_sessions(self) -> None:
         """Rebuild the session registry from the checkpointer (after a restart)."""

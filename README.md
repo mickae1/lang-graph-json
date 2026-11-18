@@ -6,15 +6,39 @@ Describe your agents in `agents.json`, your tools in `tools.json`, and get a sup
 system with human-in-the-loop confirmations, real-time streaming and hot-reload. No Python code is written
 per agent or per tool.
 
-```text
-                ┌──────────────────────── lang-graph-json ────────────────────────┐
- your app  ───► │ POST /chat · WS /stream      supervisor ──► agent ──► tools      │ ───► your REST API
- (any language) │ POST /config/provider        ▲   │            │       (REST or  │      (the "backend")
-                │ POST /reload                 └───┴── handoff ─┘        Python)  │
-                └────────────▲────────────────────────────────────────────▲───────┘
-                       agents.json                                    tools.json  ◄── generated from
-                   (edited by your UI)                                              AI_METADATA({...})
-                                                                                     in your sources
+```mermaid
+flowchart LR
+    App["Your application<br/>(any language)"]
+
+    subgraph LGJ["lang-graph-json"]
+        direction TB
+        API["HTTP / WebSocket API<br/>/chat · /confirm · /cancel · /stream<br/>/config/provider · /reload"]
+        Sup{{"Supervisor"}}
+        A1["Agent A"]
+        A2["Agent B"]
+        Tools["Tools<br/>REST or Python"]
+        API --> Sup
+        Sup --> A1
+        Sup --> A2
+        A1 --> Sup
+        A2 --> Sup
+        A1 -. handoff .-> A2
+        A1 --> Tools
+        A2 --> Tools
+    end
+
+    Backend["Your REST API<br/>(the backend)"]
+    LLM["LLM provider<br/>Anthropic · Azure · OpenAI-compatible · Ollama"]
+    Agents[("agents.json<br/>edited by your UI")]
+    ToolsJson[("tools.json")]
+    Sources["Your sources<br/>AI_METADATA markers"]
+
+    App <-->|"REST + WebSocket"| API
+    Tools -->|HTTP| Backend
+    Sup <--> LLM
+    Agents --> LGJ
+    Sources -->|"generate_tools_json.py<br/>at build time"| ToolsJson
+    ToolsJson --> LGJ
 ```
 
 - **JSON-driven**: agents (prompt, model, tools, confirmations, history size, handoffs) are entries in
