@@ -40,6 +40,7 @@ from ..utils.config_loader import (
     ConfigBundle,
     ConfigError,
     ConfigWatcher,
+    SCHEMA_VERSIONS,
     ServerSettings,
     config_from_data,
     load_config,
@@ -166,6 +167,7 @@ class Runtime:
         self.started = time.time()
         self._watch_task: asyncio.Task | None = None
         self._maintenance_task: asyncio.Task | None = None
+        self._token_warned: set[tuple[str, float]] = set()
 
     @property
     def _base_config_dir(self) -> Path:
@@ -437,6 +439,19 @@ class Runtime:
         if _loop_running():  # the graph now exists: look for restored pending confirmations
             asyncio.ensure_future(self._restore_pending())
 
+    def set_token(self, token: str, provider: str | None = None, expires_in: float | None = None) -> dict:
+        """Renew the host-pushed token of a provider (no graph rebuild)."""
+        name = self.llms.update_token(provider, token, expires_in)
+        expires_at = self.llms.token_expiry.get(name)
+        return {"status": "updated", "provider": name, "expires_at": expires_at}
+
+    def token_status(self, now: float | None = None) -> dict[str, float]:
+        """Seconds left before expiry of each host-pushed token."""
+        now = time.time() if now is None else now
+        return {name: round(ts - now) for name, ts in self.llms.token_expiry.items()}
+
+    TOKEN_WARNING_S = 300
+
     def set_proxy(self, cfg: ProxyConfig) -> None:
         if isinstance(self.llms, StaticLLMFactory):
             self.llms.proxy = cfg  # caller-built models manage their own HTTP clients
@@ -499,6 +514,8 @@ class Runtime:
             ],
             "tools": len(self.registry.tools) if self.registry else 0,
             "persistence": self.persistence,
+            "token_expires_in_s": self.token_status(),
+            "schema_versions": dict(SCHEMA_VERSIONS),
             "sqlite_path": str(self.sqlite_file) if self.sqlite_file else None,
             "sessions": len(self.sessions),
             "running_turns": sum(1 for s in self.sessions.values() if s.running),
@@ -589,6 +606,13 @@ class Runtime:
         s = self.bundle.settings
         now = time.time() if now is None else now
         await self._restore_pending()
+
+        for name, left in self.token_status(now).items():
+            key = (name, self.llms.token_expiry[name])
+            if left <= self.TOKEN_WARNING_S and key not in self._token_warned:
+                self._token_warned.add(key)
+                event = "provider.token_expired" if left <= 0 else "provider.token_expiring"
+                self.events.publish(envelope("*", event, {"provider": name, "expires_in_s": max(0, left)}))
 
         if s.confirmation_timeout_s and self.graph is not None:
             for sess in list(self.sessions.values()):

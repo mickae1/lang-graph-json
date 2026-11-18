@@ -86,6 +86,11 @@ accept them from cmd, PowerShell and MSYS shells alike.
   next LLM call is valid. Timeouts and cancellations end in the same `_close_turn`.
 - **Validation is a dry run**: `Runtime.validate` builds everything but never assigns runtime state or
   writes files.
+- **Schema versions**: when the format of `agents.json` / `tools.json` changes incompatibly, bump
+  `SCHEMA_VERSIONS` (config_loader) and `SCHEMA_VERSION` (tools_parser) together, and keep reading the
+  older versions (migrate them in the validators).
+- **Token renewal never rebuilds the graph**: `POST /config/provider/token` only replaces the credential
+  and drops the cached clients of that provider.
 - **Localhost only** unless `--allow-remote`. The backend client never uses a proxy (`trust_env=False`).
 - The parser output is **deterministic** (sorted, no timestamp). `config/tools.json` must equal the output
   for `examples/cpp` (a test checks it).

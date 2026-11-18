@@ -69,6 +69,10 @@ class ProviderEntry(BaseModel):
     headers: dict[str, str] = Field(default_factory=dict)
     # Only for type == "fake": scripted responses (see fake_llm.FakeChatModel).
     fake_responses: list[Any] | None = None
+    # Lifetime (seconds) of a token pushed by the host application in
+    # ``api_key`` (auth "bearer", e.g. a user's Azure AD token). Informative:
+    # the server warns before expiry; renew with POST /config/provider/token.
+    token_expires_in: float | None = Field(None, gt=0)
 
     @model_validator(mode="after")
     def _check(self) -> "ProviderEntry":
@@ -252,6 +256,34 @@ class LLMFactory:
         self._cache: dict[tuple[str, str], tuple[BaseChatModel, str | None]] = {}
         self._token_providers: dict[str, AzureAdTokenProvider] = {}
         self._lock = threading.Lock()
+        # provider name -> expiry timestamp of a host-pushed token
+        self.token_expiry: dict[str, float] = {}
+        for name, entry in (providers.providers.items() if providers else ()):
+            if entry.token_expires_in:
+                self.token_expiry[name] = time.time() + entry.token_expires_in
+
+    def update_token(self, provider: str | None, token: str, expires_in: float | None = None) -> str:
+        """Replace the token of a provider without rebuilding the graph.
+
+        For host-managed credentials (auth ``bearer`` or ``api_key``), e.g. a
+        user's Azure AD token renewed by the host application before it
+        expires. Running turns keep their client; the next LLM call uses the
+        new token. Returns the provider name.
+        """
+        name, entry = self.provider_entry(provider)
+        if entry.auth not in ("bearer", "api_key"):
+            raise ValueError(f"provider '{name}' uses auth '{entry.auth}': its token is not pushed by the host")
+        if not token:
+            raise ValueError("empty token")
+        with self._lock:
+            self.providers.providers[name] = entry.model_copy(update={"api_key": SecretStr(token)})
+            for key in [k for k in self._cache if k[0] == name]:
+                del self._cache[key]
+            if expires_in:
+                self.token_expiry[name] = time.time() + expires_in
+            else:
+                self.token_expiry.pop(name, None)
+        return name
 
     @classmethod
     def register(cls, provider_type: str, builder: Builder) -> None:
@@ -361,6 +393,8 @@ def _build_azure_openai(entry, model, proxy, factory, provider_name=None, token=
         tp = factory.token_provider(provider_name, entry)
         kw["azure_ad_token_provider"] = tp.get_token
         kw["azure_ad_async_token_provider"] = tp.aget_token
+    elif entry.auth == "bearer":  # Azure AD token obtained by the host (user sign-in)
+        kw["azure_ad_token"] = entry.api_key.get_secret_value()
     else:
         kw["api_key"] = entry.api_key.get_secret_value()
     return AzureChatOpenAI(
@@ -449,6 +483,9 @@ class StaticLLMFactory(LLMFactory):
 
     def provider_names(self) -> set[str]:
         return set(self.models)
+
+    def update_token(self, provider: str | None, token: str, expires_in: float | None = None) -> str:
+        raise ValueError("the chat models were created in code (llm=...): renew their credentials there")
 
     def available_models(self) -> dict[str, list[str]]:
         return {n: [getattr(m, "model", None) or getattr(m, "model_name", None) or type(m).__name__] for n, m in self.models.items()}

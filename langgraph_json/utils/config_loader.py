@@ -36,6 +36,25 @@ HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 PARAM_TYPES = {"string", "integer", "number", "boolean", "array", "object"}
 RESERVED_AGENT_NAMES = {SUPERVISOR, FINISH, "__start__", "__end__"}
 
+# Schema version of each file understood by this release ("version" field).
+# A file declaring a newer version is refused with an explicit message instead
+# of being silently misread; older versions stay accepted.
+SCHEMA_VERSIONS = {"agents.json": 1, "tools.json": 1}
+
+
+def check_schema_version(version: int, filename: str) -> int:
+    supported = SCHEMA_VERSIONS[filename]
+    if version < 1:
+        raise ValueError(f"invalid schema version {version} (versions start at 1)")
+    if version > supported:
+        from .. import __version__
+
+        raise ValueError(
+            f"{filename} schema version {version} is not supported by lang-graph-json {__version__} "
+            f"(supported: 1 to {supported}) — upgrade lang-graph-json"
+        )
+    return version
+
 DEFAULT_SUPERVISOR_PROMPT = (
     "You are the supervisor of a team of specialised agents. "
     "Read the conversation and decide which agent must act next, or FINISH when "
@@ -210,6 +229,11 @@ class ToolsFile(BaseModel):
     version: int = 1
     tools: list[ToolDef] = Field(default_factory=list)
 
+    @field_validator("version")
+    @classmethod
+    def _check_version(cls, v: int) -> int:
+        return check_schema_version(v, TOOLS_FILE)
+
     @model_validator(mode="before")
     @classmethod
     def _accept_list(cls, data: Any) -> Any:
@@ -260,6 +284,11 @@ class AgentsConfig(BaseModel):
     default_provider: str | None = None
     supervisor: SupervisorDef = Field(default_factory=SupervisorDef)
     agents: dict[str, AgentDef] = Field(default_factory=dict)
+
+    @field_validator("version")
+    @classmethod
+    def _check_version(cls, v: int) -> int:
+        return check_schema_version(v, AGENTS_FILE)
 
     @model_validator(mode="before")
     @classmethod

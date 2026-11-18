@@ -10,6 +10,7 @@ Endpoints (localhost only):
 * ``POST /config/validate``, ``POST /agents/validate`` — dry-run validation
 * ``GET  /status``               — health, agents, sessions
 * ``GET|POST /config/provider``  — LLM providers (in memory only)
+* ``POST /config/provider/token`` — renew a host-managed token (user sign-in)
 * ``GET  /config/provider/test`` — test LLM connectivity
 * ``POST /config/proxy``         — proxy settings (in memory only)
 * ``GET|POST /config/paths``     — shared exchange folders
@@ -54,6 +55,12 @@ class ConfirmRequest(BaseModel):
 
 class PathsRequest(BaseModel):
     paths: dict[str, str]
+
+
+class TokenRequest(BaseModel):
+    token: str = Field(..., min_length=1)
+    provider: str | None = None
+    expires_in: float | None = Field(None, gt=0)
 
 
 class CancelRequest(BaseModel):
@@ -158,7 +165,12 @@ def create_app(runtime: Runtime, manage_lifespan: bool = True) -> FastAPI:
     async def get_provider():
         if not runtime.llms.configured:
             return {"configured": False, "models": {}}
-        return {"configured": True, **runtime.llms.providers.redacted(), "models": runtime.llms.available_models()}
+        return {
+            "configured": True,
+            **runtime.llms.providers.redacted(),
+            "models": runtime.llms.available_models(),
+            "token_expires_in_s": runtime.token_status(),
+        }
 
     @app.post("/config/provider")
     async def set_provider(payload: dict[str, Any]):
@@ -168,6 +180,16 @@ def create_app(runtime: Runtime, manage_lifespan: bool = True) -> FastAPI:
             raise HTTPException(status_code=422, detail=exc.errors(include_input=False, include_context=False)) from exc
         runtime.set_provider(cfg)
         return {"status": "configured", "default": cfg.default, "providers": sorted(cfg.providers), "graph_ready": runtime.graph is not None}
+
+    @app.post("/config/provider/token")
+    async def set_token(req: TokenRequest):
+        """Renew a host-managed token (e.g. the user's Azure AD token) without rebuilding anything."""
+        try:
+            return runtime.set_token(req.token, req.provider, req.expires_in)
+        except ProviderNotConfigured as exc:
+            raise NotReady(str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/config/provider/test")
     async def test_provider(provider: str | None = None, model: str | None = None):

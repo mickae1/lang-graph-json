@@ -317,6 +317,30 @@ refreshed automatically. Proxy settings (`POST /config/proxy`: `http_proxy`, `ht
 to the LLM clients and to the token requests, never to the backend (localhost). `GET /config/provider/test`
 checks connectivity.
 
+### Signing in as the user (no secret on the workstation)
+
+With the Azure AD *client credentials* flow (`auth: "azure_ad"`), every installation holds the same
+`client_secret`. To avoid that, the host application can sign the **user** in (MSAL, Qt
+`QOAuth2AuthorizationCodeFlow`, Windows SSO) and push the user's token instead:
+
+```json
+{ "type": "anthropic", "auth": "bearer", "endpoint": "https://llm-gateway.example.com",
+  "api_key": "<user access token>", "token_expires_in": 3600, "default_model": "claude-sonnet-5-5" }
+```
+
+Before the token expires (the `provider.token_expiring` event and `token_expires_in_s` in `/status` signal
+it), the host pushes the new one with `POST /config/provider/token {"token": "...", "expires_in": 3600}`.
+The client is rebuilt on the next LLM call, without touching the graph or the running sessions.
+`azure_openai` providers accept `auth: "bearer"` the same way (the token is sent as an Azure AD token).
+
+## Schema versions
+
+`agents.json` and `tools.json` carry a `"version"` field (default `1`, written by the parser). A release
+supports the versions listed in `GET /status` → `schema_versions`. A file declaring a **newer** version is
+refused with an explicit message ("… is not supported by lang-graph-json X — upgrade"), instead of being
+misread. Older versions stay accepted. Host applications must produce files in this format, and can
+check compatibility at startup through `/status`.
+
 ## HTTP / WebSocket API
 
 All endpoints are on localhost. The OpenAPI documentation is at `/docs`.
@@ -331,6 +355,7 @@ All endpoints are on localhost. The OpenAPI documentation is at `/docs`.
 | `POST /agents/validate` (body: `agents.json`) · `POST /config/validate` `{agents?, tools?, settings?}` | **Dry run**: `{valid, errors, warnings}`. Nothing is applied or written. It runs the same checks as a reload (schemas, Python imports, providers, graph build). |
 | `GET /status` | State (`running` / `waiting_provider` / `error`), agents, tools, sessions, warnings. |
 | `GET·POST /config/provider` · `GET /config/provider/test` | LLM providers. |
+| `POST /config/provider/token` `{token, provider?, expires_in?}` | Renews a token managed by the host application (user sign-in) without rebuilding anything. |
 | `POST /config/proxy` · `GET·POST /config/paths` | Proxy, shared folders. |
 | `GET /tools` · `GET /agents` | What is loaded (for a configuration UI). |
 | `GET /sessions` · `GET·DELETE /sessions/{id}` | History, reset. |
@@ -352,7 +377,7 @@ pending, or nothing to confirm), `502` (LLM failure).
 WebSocket events (`{session_id, event_type, timestamp, data}`): `agent.start`, `agent.end`, `llm.start`,
 `llm.stream` (tokens), `llm.end` (usage), `tool.start`, `tool.end`, `confirmation.needed`,
 `confirmation.expired`, `turn.cancelled`, `session.expired`, `budget.warning`, `config.reloaded`,
-`chat.result`, `error`.
+`provider.token_expiring` (5 min before), `provider.token_expired`, `chat.result`, `error`.
 
 Typical startup sequence for a host application: launch the executable (`--port`), poll `GET /status`,
 then `POST /config/provider` (and `/config/proxy`, `/config/paths`). After editing `agents.json`, call

@@ -58,6 +58,8 @@ _PY_DEF_AFTER = re.compile(r"\s*\)\s*(?:@[^\n]*\n\s*)*(?:async\s+)?def\s+([A-Za-
 HTTP_METHODS = {"GET", "POST", "PUT", "PATCH", "DELETE"}
 PARAM_TYPES = {"string", "integer", "number", "boolean", "array", "object"}
 NAME_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+# Schema version of the generated tools.json (must match config_loader.SCHEMA_VERSIONS).
+SCHEMA_VERSION = 1
 
 
 # --------------------------------------------------------------------------- #
@@ -480,7 +482,7 @@ def parse_sources(
 
 def render(tools: list[dict]) -> str:
     """Deterministic output (no timestamp) so CI can diff it."""
-    doc = {"version": 1, "generated_by": "generate_tools_json.py", "tools": tools}
+    doc = {"version": SCHEMA_VERSION, "generated_by": "generate_tools_json.py", "tools": tools}
     return json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
 
 
