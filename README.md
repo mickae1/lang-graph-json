@@ -498,11 +498,12 @@ pytest -m dist -v                         # tests of the compiled bundle
 - **Offline suite**: a scripted `FakeChatModel` (tool calls and streaming) and a mocked backend cover
   routing, handoffs, sub-graphs, confirmations, guards, streaming, hot-reload, providers, the parser, the CLI
   (a real server in a subprocess) and library mode.
-- **Live tests** (`tests/test_live.py`, `tests/test_live_advanced.py`): copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY` (optionally
+- **Live tests** (`tests/test_live.py`, `tests/test_live_advanced.py`, `tests/test_live_http.py`): copy `.env.example` to `.env` and set `ANTHROPIC_API_KEY` (optionally
   `LGJ_TEST_MODEL`, default `claude-haiku-5-5`), or `LGJ_TEST_PROVIDER_JSON` for any other provider. They run
   the full stack against the real model (routing, REST and Python tools, confirmation, multi-agent chain,
   memory, streaming; plus handoff, sub-graph, whitelist, prompt injection, backend errors, timeout,
-  config reload and SQLite restart), and they are skipped when no credentials are found.
+  config reload, SQLite restart; and one end-to-end run of the real server process over HTTP, where the key
+  is only sent through `POST /config/provider`), and they are skipped when no credentials are found.
 - **C++ example**: `cmake -S examples/cpp -B build/cpp && cmake --build build/cpp`. Its pre-build step
   regenerates `tools.json`.
 
