@@ -62,6 +62,24 @@ def message_text(content: Any) -> str:
     return "" if content is None else str(content)
 
 
+THINKING_BLOCKS = ("thinking", "redacted_thinking")
+
+
+def strip_thinking(m: AIMessage) -> AIMessage | None:
+    """Copy of ``m`` without reasoning blocks (``None`` if nothing is left).
+
+    Providers such as Anthropic bind a thinking block to the exact prompt that
+    produced it (system prompt, tools, earlier messages). The engine re-renders
+    the history for each agent, so only the blocks of the tool loop in progress
+    can be replayed; older ones are dropped (allowed from the front)."""
+    if not isinstance(m.content, list) or not any(isinstance(b, dict) and b.get("type") in THINKING_BLOCKS for b in m.content):
+        return m
+    content = [b for b in m.content if not (isinstance(b, dict) and b.get("type") in THINKING_BLOCKS)]
+    if not content and not m.tool_calls:
+        return None
+    return m.model_copy(update={"content": content})
+
+
 def _truncate(text: str, n: int) -> str:
     return text if len(text) <= n else text[:n] + "…"
 
@@ -120,7 +138,17 @@ def render_for_agent(messages: list[AnyMessage], agent: str, max_prior: int) -> 
                 out.append(HumanMessage(content=f"[{who or 'agent'}] tool {m.name} returned: {_truncate(message_text(m.content), 2000)}"))
     if not out or isinstance(out[-1], AIMessage):
         out.append(HumanMessage(content="[supervisor] Continue with the task."))
-    return out
+    # Reasoning blocks are only replayed in the tool loop in progress (after
+    # the last user/rendered message), where the prompt prefix is unchanged.
+    loop_start = max((i for i, m in enumerate(out) if isinstance(m, HumanMessage)), default=0)
+    rendered: list[BaseMessage] = []
+    for i, m in enumerate(out):
+        if i < loop_start and isinstance(m, AIMessage):
+            m = strip_thinking(m)
+            if m is None:
+                continue
+        rendered.append(m)
+    return rendered
 
 
 def transcript(messages: list[AnyMessage], max_prior: int) -> str:
@@ -171,6 +199,7 @@ def make_route_tool(members: dict[str, AgentDef]) -> StructuredTool:
         "Route",
         next=(Literal[options], Field(..., description="Agent that must act next, or FINISH when the request is answered")),  # type: ignore[valid-type]
         instructions=(str | None, Field(None, description="Short instructions for the chosen agent")),
+        answer=(str | None, Field(None, description="Only with next=FINISH when no agent is needed: your complete reply to the user")),
     )
 
     def _route(**_: Any) -> str:
@@ -191,8 +220,8 @@ def supervisor_system_prompt(spec: SupervisorDef, members: dict[str, AgentDef]) 
     lines += [
         "",
         "Always call the `route` tool. Use next=FINISH when the last agent answer fully "
-        "addresses the user's request (or when you can answer a trivial message yourself; "
-        "then also write your answer as text).",
+        "addresses the user's request, or when no agent is needed (greetings, questions about "
+        "the conversation itself): then put your complete reply in the `answer` field.",
     ]
     return "\n".join(lines)
 
@@ -237,10 +266,11 @@ def make_supervisor_node(members: dict[str, AgentDef], spec: SupervisorDef, ctx:
         resp = await llm.bind_tools([route_tool]).ainvoke(prompt, config)
         tokens = token_usage(resp)
 
-        nxt, instructions = FINISH, None
+        nxt, instructions, answer = FINISH, None, None
         for tc in resp.tool_calls:
             if tc["name"] == "route":
                 candidate = tc["args"].get("next")
+                answer = tc["args"].get("answer")
                 if candidate in members or candidate == FINISH:
                     nxt, instructions = candidate, tc["args"].get("instructions")
                 else:
@@ -249,7 +279,7 @@ def make_supervisor_node(members: dict[str, AgentDef], spec: SupervisorDef, ctx:
 
         update = {"next": nxt, "task": instructions, "supervisor_steps": steps + 1, "tokens_used": tokens}
         if nxt == FINISH and not answered_this_turn(messages):
-            text = message_text(resp.content) or "I could not find an agent able to handle this request."
+            text = answer or message_text(resp.content) or "I could not find an agent able to handle this request."
             update["messages"] = [AIMessage(content=text, name=SUPERVISOR)]
         return update
 

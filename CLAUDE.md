@@ -104,7 +104,7 @@ accept them from cmd, PowerShell and MSYS shells alike.
     mock (`httpx.MockTransport`); never real network in the offline suite;
   - `make_runtime` (fixture) builds a runtime from a temp config;
   - keep coverage at 100 %, and use `# pragma: no cover` only for purely defensive branches.
-- Live tests (`tests/test_live.py`) assert behaviour (tools called, arguments, routing), not exact wording.
+- Live tests (`tests/test_live*.py`) assert behaviour (tools called, arguments, routing), not exact wording.
 - When adding a server setting: add it to `ServerSettings`, `config/server.json`, the README table and a test.
 - When adding an HTTP endpoint: add it to `gateway/app.py`, the README API table and `tests/test_gateway.py`.
 - When adding a language profile to the parser: add it to `PROFILES`. The parametrised test covers the basics.

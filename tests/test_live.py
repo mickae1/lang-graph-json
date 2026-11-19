@@ -36,7 +36,6 @@ def provider_payload() -> dict | None:
         "type": "anthropic",
         "api_key": key,
         "default_model": os.environ.get("LGJ_TEST_MODEL", DEFAULT_MODEL),
-        "temperature": 0,
         "max_tokens": 1024,
     }
     if os.environ.get("ANTHROPIC_BASE_URL"):

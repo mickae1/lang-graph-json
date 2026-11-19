@@ -50,7 +50,7 @@ def make_llm():
     if os.environ.get("ANTHROPIC_API_KEY"):
         from langchain_anthropic import ChatAnthropic
 
-        return ChatAnthropic(model=os.environ.get("LGJ_MODEL", "claude-haiku-5-5"), temperature=0)
+        return ChatAnthropic(model=os.environ.get("LGJ_MODEL", "claude-haiku-5-5"))
     return FakeChatModel(responses=[
         {"tool_calls": [{"name": "route", "args": {"next": "weather"}}]},
         {"tool_calls": [{"name": "get_weather", "args": {"city": "Paris"}}]},

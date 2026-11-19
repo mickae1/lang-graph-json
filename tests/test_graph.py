@@ -46,6 +46,13 @@ async def test_supervisor_answers_directly(make_runtime):
     assert r["response"] == "Hello! How can I help?" and r["agent"] == "supervisor" and r["route"] == []
 
 
+async def test_supervisor_answer_field_wins_over_empty_text(make_runtime):
+    # models that think between tool calls may return no visible text: the reply is in `answer`
+    rt = await make_runtime(responses=[{"content": "", "tool_calls": [{"name": "route", "args": {"next": "FINISH", "answer": "PINEAPPLE"}}]}])
+    r = await rt.chat("what was the code word?")
+    assert r["response"] == "PINEAPPLE" and r["agent"] == "supervisor"
+
+
 async def test_supervisor_unknown_route_finishes(make_runtime):
     rt = await make_runtime(responses=[route("ghost")])
     r = await rt.chat("hello")

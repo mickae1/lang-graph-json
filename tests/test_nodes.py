@@ -5,6 +5,7 @@ from langgraph_json.utils.nodes import (
     history_window,
     message_text,
     render_for_agent,
+    strip_thinking,
     transcript,
 )
 
@@ -73,3 +74,28 @@ def test_answered_this_turn():
 def test_message_text_handles_blocks():
     assert message_text([{"type": "text", "text": "a"}, {"type": "tool_use"}, "b"]) == "ab"
     assert message_text(None) == ""
+
+
+THINK = {"type": "thinking", "thinking": "", "signature": "sig"}
+
+
+def test_thinking_blocks_only_replayed_in_the_tool_loop_in_progress():
+    old = AIMessage(content=[THINK, {"type": "text", "text": "done before"}], name="a", id="old")
+    only_thinking = AIMessage(content=[{"type": "redacted_thinking", "data": "x"}], name="a", id="empty")
+    loop = AIMessage(content=[THINK], name="a", tool_calls=[tc("t1", "c9")], id="loop")
+    msgs = [
+        HumanMessage(content="q1", id="h1"), old, only_thinking,
+        HumanMessage(content="q2", id="h2"), loop,
+        ToolMessage(content="r", tool_call_id="c9", name="t1", id="r"),
+    ]
+    out = render_for_agent(msgs, "a", 10)
+    assert ids(out) == ["h1", "old", "h2", "loop", "r"]  # the reasoning-only message is dropped
+    assert out[1].content == [{"type": "text", "text": "done before"}]
+    assert out[3].content == [THINK]  # in-progress loop: kept unchanged
+
+
+def test_strip_thinking_keeps_tool_calls_and_plain_messages():
+    m = AIMessage(content=[THINK], name="a", tool_calls=[tc("t1", "c1")])
+    assert strip_thinking(m).content == [] and strip_thinking(m).tool_calls
+    plain = AIMessage(content="hi")
+    assert strip_thinking(plain) is plain
